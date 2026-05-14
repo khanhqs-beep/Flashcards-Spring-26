@@ -10,8 +10,9 @@ WORKDIR /app
 ARG VITE_BACKEND_URL=http://localhost:3001
 ENV VITE_BACKEND_URL=${VITE_BACKEND_URL}
 
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY package.json package-lock.json* ./
+# Use install (not ci) so newly-added deps resolve even if the lockfile is stale.
+RUN npm install --no-audit --no-fund
 
 COPY . .
 RUN npm run build
