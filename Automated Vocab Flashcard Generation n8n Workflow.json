@@ -1,0 +1,580 @@
+{
+  "name": "Automated Vocab Flashcard Generation n8n Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "4c0a70ed-ee27-4f0e-a6a6-77b75e320552",
+      "name": "Extract Text from PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -752,
+        2672
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "506576a1-035b-48d2-8d34-cf9890fa2f6b",
+      "name": "Gemini Model - Extract",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        544,
+        2896
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "WjEVNktjwNpTb4Tt",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "[\n  {\n    \"output\": [\n      {\n      \"id\": {\"type\": \"integer\"},\n      \"word\": {\"type\": \"string\"},\n      \"definition\": {\"type\": \"string\"},\n      \"exampleSentence\": {\"type\": \"string\"},\n      \"pos\": {\"type\": \"string\"},\n      \"category\": {\"type\": \"string\"},\n      \"label\":{\"type\": \"string\"},\n      \"source\":{\"type\": \"string\"}\n      }\n    ]\n  }\n]"
+      },
+      "id": "6f2a8502-7d83-4cc0-bb83-833583d78b98",
+      "name": "Parse Words JSON",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        688,
+        2896
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash-image",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
+        },
+        "prompt": "=TASK: IMAGE GENERATION\n\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"{{ $json.output.exampleSentence }}\".\n\n**Style:** Friendly, educational corporate vector art.\n**Visual Elements:** Clean thick outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.\n**Constraint:** Do NOT generate any text, words, letters, or numbers within the image. The output must be the illustration only.",
+        "options": {
+          "binaryPropertyOutput": "=flashcard_illus"
+        }
+      },
+      "id": "7d5d8fa2-6cf4-410e-ab44-042fb085b478",
+      "name": "Generate Flashcard Illustration",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        2672
+      ],
+      "executeOnce": false,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "WjEVNktjwNpTb4Tt",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "upsert",
+        "projectId": "vocab-flashcard-blueocean",
+        "collection": "vocab_flashcards",
+        "updateKey": "=name",
+        "columns": "=mediaLink"
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        2080,
+        2672
+      ],
+      "id": "05783c88-0a2b-4ea8-915f-40e00f934569",
+      "name": "Save image URL on Cloud Firestore",
+      "credentials": {
+        "googleApi": {
+          "id": "2lJLcp1P3FPByyE0",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "= {{ $json.word }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a vocabulary extraction assistant for an English-learning project using Google’s Gemini API. Read the provided text from the Fry Word List or Oxford 3000-5000 and return only valid vocabulary words.\n\nUse the following instructions and output format:\n\nInput\n\n- Word\n\nOutput\n\nFor each distinct word found in the text:\n\n1. Extract the word  \n   - Identify the primary English word from each entry, ignoring formatting noise, list headers, and grammatical abbreviations (e.g., 'v.', 'n.', 'adj.').\n   - Lowercase it (unless it is a proper noun).  \n   - Exclude duplicates, numbers, and obvious non-words.\n\n2. Generate difficulty label\n   - Verify if a difficulty label exists; if missing, evaluate the vocabulary and assign the appropriate CEFR level (A1–C1).\n\n3. Generate word definition  \n   - Generate a concise, student-friendly definition in less than or equal to 10 words or 60 characters, strictly constraining the defining vocabulary and sentence structure to match the identified CEFR proficiency level. \n   - The definition should be a phrase in lowercase.\n\n4. Generate example sentence  \n   - Generate a single, concise example sentence demonstrating the target word, strictly calibrating the sentence structure and surrounding vocabulary to match the word’s specific CEFR proficiency level.\n\n5. Identify part of speech  \n   - Provide a coarse POS tag under `pos`, such as `noun`, `verb`, `adjective`, `adverb`, `preposition`, `pronoun`, `conjunction`.\n\n6. Generate a category\n  - Provide a single broad semantic category label (such as food, emotion, action, animal, environment, object, place, or person) for the given English word.\n\n7. Generate a unique ID  \n   - Create a short unique integer ID under 'id' for each word (e.g., 1).\n\nReturn a valid, unformatted JSON object containing a single root array named \"output\", where each entry contains the following parameters: word, definition, exampleSentence, label, pos, category, id."
+        }
+      },
+      "id": "6775b287-f6fc-4cc1-95c2-5a48a062a286",
+      "name": "Generate Words, Meanings, Labels",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        544,
+        2672
+      ],
+      "executeOnce": false,
+      "notesInFlow": false,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "object",
+        "operation": "create",
+        "bucketName": "vocab-flashcard-blueocean.firebasestorage.app",
+        "objectName": "={{ $('Split Out1').item.json.output.word }}",
+        "createBinaryPropertyName": "flashcard_illus",
+        "createData": {},
+        "createQuery": {
+          "predefinedAcl": "publicRead"
+        },
+        "encryptionHeaders": {},
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.googleCloudStorage",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        2672
+      ],
+      "id": "92582998-5d15-4744-a4b8-e624b066fb5a",
+      "name": "Save illustration on Firebase Storage",
+      "executeOnce": false,
+      "credentials": {
+        "googleCloudStorageOAuth2Api": {
+          "id": "zGoGV6rLMARD6YOA",
+          "name": "Google Cloud Storage account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "getAll",
+        "projectId": "vocab-flashcard-blueocean",
+        "collection": "=vocab_flashcards",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        64,
+        2464
+      ],
+      "id": "16b57986-6036-479f-9235-1177b9d8e59d",
+      "name": "Get all words from Cloud Firestore",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "2lJLcp1P3FPByyE0",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "create",
+        "projectId": "vocab-flashcard-blueocean",
+        "collection": "vocab_flashcards",
+        "documentId": "={{ $json.word }}",
+        "columns": "=label, pos, category, exampleSentence, definition",
+        "simple": false
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        2512
+      ],
+      "id": "81fac1a5-9c42-48ba-b9fd-c4730b87972a",
+      "name": "Create documents (rows) on Cloud Firestore",
+      "alwaysOutputData": false,
+      "notesInFlow": false,
+      "executeOnce": false,
+      "credentials": {
+        "googleApi": {
+          "id": "2lJLcp1P3FPByyE0",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "56743d18-1262-4734-be9f-56f5f9a562b9",
+              "name": "label",
+              "value": "={{ $json.output.label }}",
+              "type": "string"
+            },
+            {
+              "id": "549f18dd-1f5d-40ab-b99c-672c582fb45e",
+              "name": "pos",
+              "value": "={{ $json.output.pos }}",
+              "type": "string"
+            },
+            {
+              "id": "ded2ed5a-9e67-457b-a77e-b48d69eace19",
+              "name": "category",
+              "value": "={{ $json.output.category }}",
+              "type": "string"
+            },
+            {
+              "id": "887ed8e5-0a8a-40e8-8129-50e687a75b93",
+              "name": "exampleSentence",
+              "value": "={{ $json.output.exampleSentence }}",
+              "type": "string"
+            },
+            {
+              "id": "10661feb-4deb-41b5-bd38-be9fb418e59e",
+              "name": "definition",
+              "value": "={{ $json.output.definition }}",
+              "type": "string"
+            },
+            {
+              "id": "951b0bf7-de41-4b78-959e-c75c0d01561c",
+              "name": "word",
+              "value": "={{ $json.output.word }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        2512
+      ],
+      "id": "77d53094-c1c4-4158-a2ff-af55963c0bf9",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "d6d77479-145e-457b-92a5-41e662e012d0",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -992,
+        2672
+      ],
+      "id": "c798216f-c822-4225-b0cf-4fe4b7a2bf1d",
+      "name": "(Webhook) Upload Vocabulary PDF",
+      "webhookId": "d6d77479-145e-457b-92a5-41e662e012d0"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a vocabulary extraction assistant for an English-learning project using Google’s Gemini API. Read the provided text from the Fry Word List or Oxford 3000-5000 and return only valid vocabulary words.\n\nUse the following instructions and output format:\n\nInput\n\n- Jumbled English vocabulary text which may contain unnecessary sentences or phrases\n\nOutput\n\nFor the first 10 vocabulary words found in the text:\n\n1. Extract the word  \n   - Identify the primary English word from each entry, ignoring formatting noise, list headers, and grammatical abbreviations (e.g., 'v.', 'n.', 'adj.').\n   - Lowercase it (unless it is a proper noun).  \n   - Exclude numbers, and obvious non-words.\n\nReturn a valid, unformatted JSON object containing a single root array named \"output\", where each entry is an individual output containing the following parameters: word."
+        }
+      },
+      "id": "33bf1b97-79ad-4c76-b5ef-5c8932e4cbe8",
+      "name": "Get Words",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -512,
+        2672
+      ],
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        2672
+      ],
+      "id": "413f8d46-cb9e-4c96-9140-8567f2b30278",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "_id",
+              "field2": "word"
+            }
+          ]
+        },
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input2",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        288,
+        2672
+      ],
+      "id": "e4eecf23-8bd6-4cf2-9cdf-7ca015eaa6bb",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        928,
+        2672
+      ],
+      "id": "4feeee1d-4a21-4221-a569-82232b02d2d2",
+      "name": "Split Out1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "14570f13-1ed1-452f-810b-1b89e6d86831",
+      "name": "Gemini Model - Extract1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        2912
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "WjEVNktjwNpTb4Tt",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "[\n  {\n    \"output\": [\n      {\n      \"id\": {\"type\": \"integer\"},\n      \"word\": {\"type\": \"string\"},\n      \"definition\": {\"type\": \"string\"},\n      \"exampleSentence\": {\"type\": \"string\"},\n      \"pos\": {\"type\": \"string\"},\n      \"category\": {\"type\": \"string\"},\n      \"label\":{\"type\": \"string\"},\n      \"source\":{\"type\": \"string\"}\n      }\n    ]\n  }\n]"
+      },
+      "id": "50fff819-0bf7-4c15-baee-fdbb4b47ec0c",
+      "name": "Parse Words JSON1",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -368,
+        2912
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract Text from PDF": {
+      "main": [
+        [
+          {
+            "node": "Get Words",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Model - Extract": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Words, Meanings, Labels",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Words JSON": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate Words, Meanings, Labels",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Flashcard Illustration": {
+      "main": [
+        [
+          {
+            "node": "Save illustration on Firebase Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Words, Meanings, Labels": {
+      "main": [
+        [
+          {
+            "node": "Split Out1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save illustration on Firebase Storage": {
+      "main": [
+        [
+          {
+            "node": "Save image URL on Cloud Firestore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get all words from Cloud Firestore": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create documents (rows) on Cloud Firestore": {
+      "main": [
+        []
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Create documents (rows) on Cloud Firestore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "(Webhook) Upload Vocabulary PDF": {
+      "main": [
+        [
+          {
+            "node": "Extract Text from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Words": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Get all words from Cloud Firestore",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Generate Words, Meanings, Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out1": {
+      "main": [
+        [
+          {
+            "node": "Generate Flashcard Illustration",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Model - Extract1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Get Words",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Words JSON1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Get Words",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "3618cb22-6a6b-4e39-a912-7bf50c75f42d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1306759f5f4ef8b1e55cc0d47137ee3de593a470fb9afe56f931726e4ca71f62"
+  },
+  "id": "4tQs26gW7Po5R4ve",
+  "tags": []
+}
