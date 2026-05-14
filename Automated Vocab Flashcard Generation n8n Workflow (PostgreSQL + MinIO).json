@@ -425,6 +425,51 @@
       ],
       "id": "url-builder-node",
       "name": "Build Image URL"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "check-content-type",
+              "leftValue": "={{ $json.headers['content-type'] }}",
+              "rightValue": "application/json",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -852,
+        2672
+      ],
+      "id": "if-check-file-type",
+      "name": "Check File Type"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const body = $input.first().json.body;\nconst words = body.words || [];\nreturn [{ json: { output: words.map(w => ({ word: w })) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -652,
+        2472
+      ],
+      "id": "format-preparsed-words",
+      "name": "Format Pre-parsed Words"
     }
   ],
   "pinData": {},
@@ -537,7 +582,36 @@
       "main": [
         [
           {
+            "node": "Check File Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check File Type": {
+      "main": [
+        [
+          {
+            "node": "Format Pre-parsed Words",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Extract Text from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Pre-parsed Words": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
             "type": "main",
             "index": 0
           }

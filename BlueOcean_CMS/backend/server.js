@@ -3,6 +3,8 @@ import multer from "multer";
 import cors from "cors";
 import pg from "pg";
 import dotenv from "dotenv";
+import XLSX from "xlsx";
+import path from "path";
 
 dotenv.config();
 
@@ -31,6 +33,32 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", message: "Backend server is running" });
 });
 
+function extractWordsFromSpreadsheet(buffer, filename) {
+  const workbook = XLSX.read(buffer);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+  const words = [];
+  for (const row of rows) {
+    for (const cell of row) {
+      if (typeof cell === "string" && cell.trim()) {
+        const cleaned = cell.trim().toLowerCase();
+        if (cleaned.length > 0 && cleaned.length < 100 && !/^\d+$/.test(cleaned)) {
+          words.push(cleaned);
+        }
+      }
+    }
+  }
+
+  // Remove likely header rows (common headers)
+  const headers = ["word", "words", "vocabulary", "vocab", "term", "terms"];
+  if (words.length > 0 && headers.includes(words[0])) {
+    words.shift();
+  }
+
+  return [...new Set(words)];
+}
+
 app.post("/api/upload", upload.single("data"), async (req, res) => {
   try {
     if (!req.file) {
@@ -39,14 +67,28 @@ app.post("/api/upload", upload.single("data"), async (req, res) => {
 
     console.log("File received:", req.file.originalname);
 
-    const response = await fetch(process.env.N8N_WEBHOOK_URL, {
-      method: "POST",
-      body: req.file.buffer,
-      headers: {
-        "Content-Type": req.file.mimetype,
-        "Content-Disposition": `attachment; filename="${req.file.originalname}"`,
-      },
-    });
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    let response;
+
+    if (ext === ".csv" || ext === ".xls" || ext === ".xlsx") {
+      const words = extractWordsFromSpreadsheet(req.file.buffer, req.file.originalname);
+      console.log(`Parsed ${words.length} words from ${ext} file`);
+
+      response = await fetch(process.env.N8N_WEBHOOK_URL, {
+        method: "POST",
+        body: JSON.stringify({ words, source: req.file.originalname }),
+        headers: { "Content-Type": "application/json" },
+      });
+    } else {
+      response = await fetch(process.env.N8N_WEBHOOK_URL, {
+        method: "POST",
+        body: req.file.buffer,
+        headers: {
+          "Content-Type": req.file.mimetype,
+          "Content-Disposition": `attachment; filename="${req.file.originalname}"`,
+        },
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();

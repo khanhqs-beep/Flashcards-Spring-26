@@ -30,15 +30,16 @@ export function FileUploader({ onFilesUploaded, onProgressUpdate, onFileComplete
         
         // Validate file type
         const fileExtension = file.name.split('.').pop()?.toLowerCase();
-        if (fileExtension !== 'pdf' && fileExtension !== 'csv') {
-          setError(`Invalid file type: ${file.name}. Only PDF and CSV files are supported.`);
+        const supportedTypes = ['pdf', 'csv', 'xls', 'xlsx'];
+        if (!fileExtension || !supportedTypes.includes(fileExtension)) {
+          setError(`Invalid file type: ${file.name}. Only PDF, CSV, XLS, and XLSX files are supported.`);
           continue;
         }
 
         const fileData: FileData = {
           id: Math.random().toString(36).substring(7) + Date.now() + i,
           name: file.name,
-          type: fileExtension as 'pdf' | 'csv',
+          type: fileExtension as 'pdf' | 'csv' | 'xls' | 'xlsx',
           uploadDate: new Date(),
           size: file.size,
           originalData: null,
@@ -130,7 +131,7 @@ export function FileUploader({ onFilesUploaded, onProgressUpdate, onFileComplete
           type="file"
           id="file-upload"
           className="hidden"
-          accept=".pdf,.csv"
+          accept=".pdf,.csv,.xls,.xlsx"
           multiple
           onChange={handleFileInputChange}
           disabled={isProcessing}
@@ -146,12 +147,12 @@ export function FileUploader({ onFilesUploaded, onProgressUpdate, onFileComplete
               <>
                 <Upload className="w-12 h-12 text-white mb-4" />
                 <p className="text-white mb-2">
-                  Drag and drop your PDF or CSV files here
+                  Drag and drop your files here
                 </p>
                 <p className="text-white">or click to browse</p>
                 <div className="flex items-center gap-2 mt-4 text-blue-100">
                   <FileText className="w-4 h-4" />
-                  <span>PDF, CSV files supported</span>
+                  <span>PDF, CSV, XLS, XLSX files supported</span>
                 </div>
               </>
             )}

@@ -1,7 +1,7 @@
 export interface FileData {
   id: string;
   name: string;
-  type: 'pdf' | 'csv';
+  type: 'pdf' | 'csv' | 'xls' | 'xlsx';
   uploadDate: Date;
   size: number;
   originalData: unknown;
