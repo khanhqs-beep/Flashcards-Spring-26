@@ -12,7 +12,7 @@ ENV VITE_BACKEND_URL=${VITE_BACKEND_URL}
 
 COPY package.json package-lock.json* ./
 # Use install (not ci) so newly-added deps resolve even if the lockfile is stale.
-RUN npm install --no-audit --no-fund
+RUN npm install --no-audit --no-fund --legacy-peer-deps
 
 COPY . .
 RUN npm run build
