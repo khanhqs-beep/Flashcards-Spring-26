@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   fetchFlashcards,
+  fetchFlashcardByWord,
   updateFlashcard,
   regenerateImage,
 } from "../utils/api";
@@ -15,12 +16,61 @@ import {
   ChevronRight,
   Check,
   X,
+  Search,
 } from "lucide-react";
 
 const PAGE_SIZE = 20;
 
 interface EditState {
   [word: string]: Partial<Flashcard>;
+}
+
+function HighlightMatch({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-yellow-200 rounded-sm px-0.5">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
+function ExpandableInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (expanded) {
+    return (
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setExpanded(false)}
+        placeholder={placeholder}
+        rows={3}
+        autoFocus
+        className="w-full px-1 py-0.5 text-xs h-auto border border-blue-300 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2] resize-none"
+      />
+    );
+  }
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onFocus={() => setExpanded(true)}
+      placeholder={placeholder}
+      className="w-full px-1 py-0.5 text-xs h-6 border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2] truncate"
+    />
+  );
 }
 
 export function BulkReview() {
@@ -32,6 +82,10 @@ export function BulkReview() {
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [regenerating, setRegenerating] = useState<Record<string, boolean>>({});
   const [successMsg, setSuccessMsg] = useState<Record<string, string>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [imgBust, setImgBust] = useState<Record<string, number>>({});
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const loadFlashcards = useCallback(async () => {
     try {
@@ -51,8 +105,35 @@ export function BulkReview() {
     loadFlashcards();
   }, [loadFlashcards]);
 
-  const totalPages = Math.ceil(flashcards.length / PAGE_SIZE);
-  const pageCards = flashcards.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 150);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedQuery]);
+
+  const filtered = debouncedQuery
+    ? flashcards.filter((c) => {
+        const q = debouncedQuery.toLowerCase();
+        return (
+          c.word.toLowerCase().includes(q) ||
+          (c.definition ?? "").toLowerCase().includes(q) ||
+          (c.exampleSentence ?? "").toLowerCase().includes(q) ||
+          (c.category ?? "").toLowerCase().includes(q) ||
+          (c.partOfSpeech ?? "").toLowerCase().includes(q)
+        );
+      }).sort((a, b) => {
+        const q = debouncedQuery.toLowerCase();
+        const aExact = a.word.toLowerCase() === q ? 0 : a.word.toLowerCase().startsWith(q) ? 1 : a.word.toLowerCase().includes(q) ? 2 : 3;
+        const bExact = b.word.toLowerCase() === q ? 0 : b.word.toLowerCase().startsWith(q) ? 1 : b.word.toLowerCase().includes(q) ? 2 : 3;
+        return aExact - bExact;
+      })
+    : flashcards;
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const pageCards = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const handleFieldChange = (word: string, field: string, value: string) => {
     setEdits((prev) => ({
@@ -105,7 +186,19 @@ export function BulkReview() {
     setRegenerating((prev) => ({ ...prev, [word]: true }));
     try {
       await regenerateImage(word);
-      showSuccess(word, "Image regeneration triggered");
+      showSuccess(word, "Regenerating...");
+      setTimeout(async () => {
+        try {
+          const result = await fetchFlashcardByWord(word);
+          setFlashcards((prev) =>
+            prev.map((c) => (c.word === word ? result.data : c))
+          );
+          setImgBust((prev) => ({ ...prev, [word]: Date.now() }));
+          showSuccess(word, "Image updated");
+        } catch {
+          // refetch failed silently
+        }
+      }, 10000);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Regeneration failed");
     } finally {
@@ -121,11 +214,17 @@ export function BulkReview() {
         delete next[word];
         return next;
       });
-    }, 2000);
+    }, 3000);
   };
 
   const getVal = (card: Flashcard, field: keyof Flashcard) => {
     return edits[card.word]?.[field] ?? card[field] ?? "";
+  };
+
+  const imgSrc = (card: Flashcard) => {
+    if (!card.mediaLink) return "";
+    const bust = imgBust[card.word];
+    return bust ? `${card.mediaLink}?t=${bust}` : card.mediaLink;
   };
 
   if (loading) {
@@ -163,235 +262,229 @@ export function BulkReview() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-white" style={{ fontWeight: 500 }}>
-          Bulk Review ({flashcards.length} cards)
+      <div className="flex items-center gap-3 flex-wrap">
+        <h2 className="text-white text-sm whitespace-nowrap" style={{ fontWeight: 500 }}>
+          Bulk Review ({debouncedQuery ? `${filtered.length} of ${flashcards.length}` : flashcards.length} cards)
         </h2>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={loadFlashcards}
-            className="px-4 py-2 border-2 border-white text-white rounded-lg hover:bg-white hover:text-[#003D82] transition-colors"
-          >
-            Refresh
-          </button>
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60 pointer-events-none" />
+          <input
+            ref={searchRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSearchQuery("");
+                searchRef.current?.blur();
+              }
+            }}
+            placeholder="Search flashcards..."
+            className="w-full pl-8 pr-7 py-1.5 text-sm bg-white/20 text-white placeholder-white/50 border border-white/30 rounded-lg focus:bg-white/30 focus:outline-none focus:ring-1 focus:ring-white/50"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
+        <button
+          onClick={loadFlashcards}
+          className="px-3 py-1.5 text-sm border border-white text-white rounded-lg hover:bg-white hover:text-[#003D82] transition-colors"
+        >
+          Refresh
+        </button>
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex items-center justify-center gap-3">
           <button
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="flex items-center gap-1 px-3 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-0.5 px-2 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            <ChevronLeft className="w-4 h-4" />
-            Prev
+            <ChevronLeft className="w-3 h-3" /> Prev
           </button>
-          <span className="text-white">
-            Page {page + 1} of {totalPages}
+          <span className="text-white text-xs">
+            {page + 1} / {totalPages}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             disabled={page >= totalPages - 1}
-            className="flex items-center gap-1 px-3 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-0.5 px-2 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            Next
-            <ChevronRight className="w-4 h-4" />
+            Next <ChevronRight className="w-3 h-3" />
           </button>
         </div>
       )}
 
+      {/* Empty search state */}
+      {filtered.length === 0 && debouncedQuery && (
+        <div className="bg-white/10 border border-white/20 rounded-lg p-6 text-center">
+          <p className="text-white/80">No flashcards match &lsquo;{debouncedQuery}&rsquo;</p>
+        </div>
+      )}
+
       {/* Card Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {pageCards.map((card) => (
-          <div
-            key={card.word}
-            className={`bg-white rounded-xl shadow-lg overflow-hidden transition-all ${
-              hasEdits(card.word) ? "ring-2 ring-yellow-400" : ""
-            }`}
-          >
-            {/* Image */}
-            <div className="relative h-36 bg-gradient-to-br from-gray-100 to-gray-200">
-              {card.mediaLink ? (
-                <img
-                  src={card.mediaLink}
-                  className="w-full h-full object-cover"
-                  alt={card.word}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400">
-                  <ImageIcon className="w-10 h-10" />
-                </div>
-              )}
-              <button
-                onClick={() => handleRegenerate(card.word)}
-                disabled={regenerating[card.word]}
-                className="absolute top-2 right-2 p-1.5 bg-white/90 rounded-lg shadow hover:bg-white transition-colors"
-                title="Regenerate image"
-              >
-                <RefreshCw
-                  className={`w-4 h-4 text-[#003D82] ${
-                    regenerating[card.word] ? "animate-spin" : ""
-                  }`}
-                />
-              </button>
-            </div>
-
-            {/* Editable Fields */}
-            <div className="p-3 space-y-2">
-              {/* Word (read-only, it's the PK) */}
-              <div className="text-center">
-                <span className="text-[#003D82] font-semibold text-lg">
-                  {card.word}
-                </span>
-              </div>
-
-              {/* Part of Speech */}
-              <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wide">
-                  Part of Speech
-                </label>
-                <input
-                  type="text"
-                  value={getVal(card, "partOfSpeech")}
-                  onChange={(e) =>
-                    handleFieldChange(card.word, "partOfSpeech", e.target.value)
-                  }
-                  className="w-full px-2 py-1 text-sm border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2]"
-                />
-              </div>
-
-              {/* CEFR Level */}
-              <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wide">
-                  CEFR Level
-                </label>
-                <select
-                  value={getVal(card, "label")}
-                  onChange={(e) =>
-                    handleFieldChange(card.word, "label", e.target.value)
-                  }
-                  className="w-full px-2 py-1 text-sm border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2]"
+      <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+          {pageCards.map((card) => (
+            <div
+              key={card.word}
+              className={`bg-white rounded-lg shadow overflow-hidden transition-all max-w-[240px] ${
+                hasEdits(card.word) ? "ring-2 ring-yellow-400" : ""
+              }`}
+            >
+              {/* Image */}
+              <div className="relative h-16 bg-gradient-to-br from-gray-100 to-gray-200">
+                {card.mediaLink ? (
+                  <img
+                    src={imgSrc(card)}
+                    className="w-full h-full object-cover rounded-t-lg"
+                    alt={card.word}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                    <ImageIcon className="w-6 h-6" />
+                  </div>
+                )}
+                <button
+                  onClick={() => handleRegenerate(card.word)}
+                  disabled={regenerating[card.word]}
+                  className="absolute top-1 right-1 p-0.5 bg-white/90 rounded shadow hover:bg-white transition-colors"
+                  title="Regenerate image"
                 >
-                  <option value="A1">A1</option>
-                  <option value="A2">A2</option>
-                  <option value="B1">B1</option>
-                  <option value="B2">B2</option>
-                  <option value="C1">C1</option>
-                  <option value="C2">C2</option>
-                </select>
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 text-[#003D82] ${
+                      regenerating[card.word] ? "animate-spin" : ""
+                    }`}
+                  />
+                </button>
+                {successMsg[card.word] && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-green-500/90 text-white text-[10px] text-center py-0.5 flex items-center justify-center gap-0.5">
+                    <Check className="w-2.5 h-2.5" />
+                    {successMsg[card.word]}
+                  </div>
+                )}
               </div>
 
-              {/* Category */}
-              <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wide">
-                  Category
-                </label>
+              {/* Fields */}
+              <div className="p-2 space-y-0.5">
+                {/* Row 1: word + save/discard */}
+                <div className="flex items-center justify-between min-h-[20px]">
+                  <span className="text-[#003D82] font-semibold text-sm truncate flex-1" title={card.word}>
+                    <HighlightMatch text={card.word} query={debouncedQuery} />
+                  </span>
+                  {hasEdits(card.word) && (
+                    <div className="flex items-center gap-0.5 ml-1 shrink-0">
+                      <button
+                        onClick={() => handleSave(card.word)}
+                        disabled={saving[card.word]}
+                        className="p-0.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 transition-colors"
+                        title="Save changes"
+                      >
+                        {saving[card.word] ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Save className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleDiscard(card.word)}
+                        className="p-0.5 bg-gray-200 text-gray-600 rounded hover:bg-gray-300 transition-colors"
+                        title="Discard changes"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Row 2: POS + CEFR */}
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={getVal(card, "partOfSpeech")}
+                    onChange={(e) =>
+                      handleFieldChange(card.word, "partOfSpeech", e.target.value)
+                    }
+                    placeholder="POS"
+                    title="Part of Speech"
+                    className="flex-1 min-w-0 px-1 py-0.5 text-xs h-6 border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2]"
+                  />
+                  <select
+                    value={getVal(card, "label")}
+                    onChange={(e) =>
+                      handleFieldChange(card.word, "label", e.target.value)
+                    }
+                    title="CEFR Level"
+                    className="w-14 px-1 py-0.5 text-xs h-6 border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2]"
+                  >
+                    <option value="A1">A1</option>
+                    <option value="A2">A2</option>
+                    <option value="B1">B1</option>
+                    <option value="B2">B2</option>
+                    <option value="C1">C1</option>
+                    <option value="C2">C2</option>
+                  </select>
+                </div>
+
+                {/* Row 3: Category */}
                 <input
                   type="text"
                   value={getVal(card, "category")}
                   onChange={(e) =>
                     handleFieldChange(card.word, "category", e.target.value)
                   }
-                  className="w-full px-2 py-1 text-sm border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2]"
+                  placeholder="Category"
+                  title="Category"
+                  className="w-full px-1 py-0.5 text-xs h-6 border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2]"
+                />
+
+                {/* Row 4: Definition */}
+                <ExpandableInput
+                  value={String(getVal(card, "definition"))}
+                  onChange={(v) => handleFieldChange(card.word, "definition", v)}
+                  placeholder="Definition"
+                />
+
+                {/* Row 5: Example */}
+                <ExpandableInput
+                  value={String(getVal(card, "exampleSentence"))}
+                  onChange={(v) => handleFieldChange(card.word, "exampleSentence", v)}
+                  placeholder="Example sentence"
                 />
               </div>
-
-              {/* Definition */}
-              <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wide">
-                  Definition
-                </label>
-                <textarea
-                  value={getVal(card, "definition")}
-                  onChange={(e) =>
-                    handleFieldChange(card.word, "definition", e.target.value)
-                  }
-                  rows={2}
-                  className="w-full px-2 py-1 text-sm border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2] resize-none"
-                />
-              </div>
-
-              {/* Example Sentence */}
-              <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wide">
-                  Example Sentence
-                </label>
-                <textarea
-                  value={getVal(card, "exampleSentence")}
-                  onChange={(e) =>
-                    handleFieldChange(
-                      card.word,
-                      "exampleSentence",
-                      e.target.value
-                    )
-                  }
-                  rows={2}
-                  className="w-full px-2 py-1 text-sm border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2] resize-none"
-                />
-              </div>
-
-              {/* Success message */}
-              {successMsg[card.word] && (
-                <div className="flex items-center gap-1 text-green-600 text-xs">
-                  <Check className="w-3 h-3" />
-                  {successMsg[card.word]}
-                </div>
-              )}
-
-              {/* Action buttons */}
-              {hasEdits(card.word) && (
-                <div className="flex items-center gap-1.5 pt-1">
-                  <button
-                    onClick={() => handleSave(card.word)}
-                    disabled={saving[card.word]}
-                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors"
-                  >
-                    {saving[card.word] ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <Save className="w-3 h-3" />
-                    )}
-                    Save
-                  </button>
-                  <button
-                    onClick={() => handleDiscard(card.word)}
-                    className="flex items-center justify-center gap-1 px-2 py-1.5 bg-gray-200 text-gray-600 text-xs rounded-lg hover:bg-gray-300 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                    Discard
-                  </button>
-                </div>
-              )}
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Bottom Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4 pt-4">
+        <div className="flex items-center justify-center gap-3 pt-1">
           <button
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="flex items-center gap-1 px-3 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-0.5 px-2 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            <ChevronLeft className="w-4 h-4" />
-            Prev
+            <ChevronLeft className="w-3 h-3" /> Prev
           </button>
-          <span className="text-white">
-            Page {page + 1} of {totalPages}
+          <span className="text-white text-xs">
+            {page + 1} / {totalPages}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             disabled={page >= totalPages - 1}
-            className="flex items-center gap-1 px-3 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-0.5 px-2 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            Next
-            <ChevronRight className="w-4 h-4" />
+            Next <ChevronRight className="w-3 h-3" />
           </button>
         </div>
       )}

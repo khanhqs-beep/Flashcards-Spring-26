@@ -451,7 +451,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -852,
+        -752,
         2672
       ],
       "id": "if-check-file-type",
@@ -465,11 +465,174 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -652,
+        -552,
         2472
       ],
       "id": "format-preparsed-words",
       "name": "Format Pre-parsed Words"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "check-regenerate",
+              "leftValue": "={{ $json.body.regenerateImage }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -892,
+        2672
+      ],
+      "id": "if-check-regenerate",
+      "name": "Check Regenerate Image"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const body = $input.first().json.body;\nreturn [{ json: { output: { word: body.word, exampleSentence: body.exampleSentence } } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -692,
+        2200
+      ],
+      "id": "setup-regenerate-data",
+      "name": "Setup Regenerate Data"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash-image",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
+        },
+        "prompt": "=TASK: IMAGE GENERATION\n\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"{{ $json.output.exampleSentence }}\".\n\n**Style:** Friendly, educational corporate vector art.\n**Visual Elements:** Clean thick outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.\n**Constraint:** Do NOT generate any text, words, letters, or numbers within the image. The output must be the illustration only.",
+        "options": {
+          "binaryPropertyOutput": "=flashcard_illus"
+        }
+      },
+      "id": "regen-generate-illustration",
+      "name": "Regen: Generate Illustration",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -292,
+        2200
+      ],
+      "executeOnce": false,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "={{ $env.MINIO_BUCKET }}",
+        "fileName": "=flashcards/{{ $('Setup Regenerate Data').item.json.output.word }}.png",
+        "binaryPropertyName": "flashcard_illus",
+        "additionalFields": {
+          "acl": "public-read"
+        }
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        108,
+        2200
+      ],
+      "id": "regen-upload-minio",
+      "name": "Regen: Upload to MinIO",
+      "executeOnce": false,
+      "credentials": {
+        "s3": {
+          "id": "",
+          "name": "MinIO S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "regen-url-builder",
+              "name": "url",
+              "value": "={{ $env.MINIO_PUBLIC_URL }}/{{ $env.MINIO_BUCKET }}/flashcards/{{ $('Setup Regenerate Data').item.json.output.word }}.png",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        408,
+        2200
+      ],
+      "id": "regen-build-url",
+      "name": "Regen: Build Image URL"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "vocab_flashcards",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "media_link": "={{ $json.url }}"
+          }
+        },
+        "where": {
+          "values": [
+            {
+              "column": "word",
+              "value": "={{ $('Setup Regenerate Data').item.json.output.word }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        708,
+        2200
+      ],
+      "id": "regen-update-db",
+      "name": "Regen: Update DB",
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "PostgreSQL account"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -582,11 +745,78 @@
       "main": [
         [
           {
+            "node": "Check Regenerate Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Regenerate Image": {
+      "main": [
+        [
+          {
+            "node": "Setup Regenerate Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Check File Type",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "Setup Regenerate Data": {
+      "main": [
+        [
+          {
+            "node": "Regen: Generate Illustration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regen: Generate Illustration": {
+      "main": [
+        [
+          {
+            "node": "Regen: Upload to MinIO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regen: Upload to MinIO": {
+      "main": [
+        [
+          {
+            "node": "Regen: Build Image URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regen: Build Image URL": {
+      "main": [
+        [
+          {
+            "node": "Regen: Update DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regen: Update DB": {
+      "main": [
+        []
       ]
     },
     "Check File Type": {
