@@ -78,3 +78,47 @@ export async function fetchFlashcardByWord(word: string): Promise<{ success: boo
 
   return response.json();
 }
+
+export async function updateFlashcard(
+  word: string,
+  updates: Partial<Pick<Flashcard, 'definition' | 'exampleSentence' | 'partOfSpeech' | 'label' | 'category'>>
+): Promise<{ success: boolean; data: Flashcard }> {
+  const response = await fetch(`${API_BASE_URL}/api/flashcards/${encodeURIComponent(word)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+
+  if (!response.ok) {
+    const errorData: ErrorResponse = await response.json();
+    throw new Error(errorData.message || errorData.error || 'Failed to update flashcard');
+  }
+
+  return response.json();
+}
+
+export async function deleteFlashcard(word: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/flashcards/${encodeURIComponent(word)}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const errorData: ErrorResponse = await response.json();
+    throw new Error(errorData.message || errorData.error || 'Failed to delete flashcard');
+  }
+
+  return response.json();
+}
+
+export async function regenerateImage(word: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/flashcards/${encodeURIComponent(word)}/regenerate-image`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const errorData: ErrorResponse = await response.json();
+    throw new Error(errorData.message || errorData.error || 'Failed to regenerate image');
+  }
+
+  return response.json();
+}

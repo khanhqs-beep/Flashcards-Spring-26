@@ -180,6 +180,114 @@ app.get("/api/flashcards/:word", async (req, res) => {
   }
 });
 
+app.put("/api/flashcards/:word", async (req, res) => {
+  try {
+    const { word } = req.params;
+    const { definition, exampleSentence, partOfSpeech, label, category } = req.body;
+
+    const result = await pool.query(
+      `UPDATE vocab_flashcards
+       SET definition = COALESCE($1, definition),
+           example_sentence = COALESCE($2, example_sentence),
+           pos = COALESCE($3, pos),
+           label = COALESCE($4, label),
+           category = COALESCE($5, category)
+       WHERE word = $6
+       RETURNING word, category, definition, example_sentence, label, media_link, pos, source`,
+      [definition, exampleSentence, partOfSpeech, label, category, word]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Flashcard not found", word });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      success: true,
+      data: {
+        id: row.word,
+        word: row.word,
+        category: row.category,
+        definition: row.definition,
+        exampleSentence: row.example_sentence,
+        label: row.label,
+        mediaLink: row.media_link,
+        partOfSpeech: row.pos,
+        source: row.source,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating flashcard:", error);
+    res.status(500).json({
+      error: "Failed to update flashcard",
+      message: error.message,
+    });
+  }
+});
+
+app.delete("/api/flashcards/:word", async (req, res) => {
+  try {
+    const { word } = req.params;
+    const result = await pool.query(
+      "DELETE FROM vocab_flashcards WHERE word = $1 RETURNING word",
+      [word]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Flashcard not found", word });
+    }
+
+    res.json({ success: true, message: `Deleted flashcard: ${word}` });
+  } catch (error) {
+    console.error("Error deleting flashcard:", error);
+    res.status(500).json({
+      error: "Failed to delete flashcard",
+      message: error.message,
+    });
+  }
+});
+
+app.post("/api/flashcards/:word/regenerate-image", async (req, res) => {
+  try {
+    const { word } = req.params;
+
+    const result = await pool.query(
+      "SELECT word, example_sentence FROM vocab_flashcards WHERE word = $1",
+      [word]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Flashcard not found", word });
+    }
+
+    const response = await fetch(process.env.N8N_WEBHOOK_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        regenerateImage: true,
+        word: result.rows[0].word,
+        exampleSentence: result.rows[0].example_sentence,
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`n8n returned status ${response.status}: ${errorText}`);
+    }
+
+    res.json({
+      success: true,
+      message: `Image regeneration triggered for: ${word}`,
+    });
+  } catch (error) {
+    console.error("Error regenerating image:", error);
+    res.status(500).json({
+      error: "Failed to regenerate image",
+      message: error.message,
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Backend server running on port ${PORT}`);
 });

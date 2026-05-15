@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FileUploader } from "./components/FileUploader";
 import { FileCard } from "./components/FileCard";
 import { FlashcardLibrary } from "./components/FlashcardLibrary";
+import { BulkReview } from "./components/BulkReview";
 import type { FileData, WordCard } from "./types";
 import companyLogo from "./assets/company_logo.svg";
 
@@ -9,6 +10,7 @@ export default function App() {
   const [uploadedFiles, setUploadedFiles] = useState<
     FileData[]
   >([]);
+  const [activeTab, setActiveTab] = useState<"library" | "review">("library");
 
   const handleFilesUploaded = (newFiles: FileData[]) => {
     setUploadedFiles((prev) => [...prev, ...newFiles]);
@@ -73,8 +75,8 @@ export default function App() {
               Content Management System
             </h1>
             <p className="text-blue-100 mt-2">
-              Upload PDF or CSV files to process and export as CSV
-              or JSON
+              Upload PDF, CSV, or XLS files to process and export
+              as CSV or JSON
             </p>
           </div>
         </div>
@@ -112,9 +114,31 @@ export default function App() {
           </div>
         )}
 
-        <div className="mt-12">
-          <FlashcardLibrary />
+        {/* Tab Navigation */}
+        <div className="mt-12 flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab("library")}
+            className={`px-6 py-3 rounded-lg font-medium transition-all ${
+              activeTab === "library"
+                ? "bg-white text-[#003D82] shadow-lg"
+                : "bg-white/20 text-white hover:bg-white/30"
+            }`}
+          >
+            Flashcard Library
+          </button>
+          <button
+            onClick={() => setActiveTab("review")}
+            className={`px-6 py-3 rounded-lg font-medium transition-all ${
+              activeTab === "review"
+                ? "bg-white text-[#003D82] shadow-lg"
+                : "bg-white/20 text-white hover:bg-white/30"
+            }`}
+          >
+            Bulk Review
+          </button>
         </div>
+
+        {activeTab === "library" ? <FlashcardLibrary /> : <BulkReview />}
       </main>
     </div>
   );
