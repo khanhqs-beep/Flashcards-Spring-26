@@ -10,7 +10,7 @@ export default function App() {
   const [uploadedFiles, setUploadedFiles] = useState<
     FileData[]
   >([]);
-  const [activeTab, setActiveTab] = useState<"library" | "review">("library");
+  const [activeTab, setActiveTab] = useState<"library" | "review">("review");
 
   const handleFilesUploaded = (newFiles: FileData[]) => {
     setUploadedFiles((prev) => [...prev, ...newFiles]);
