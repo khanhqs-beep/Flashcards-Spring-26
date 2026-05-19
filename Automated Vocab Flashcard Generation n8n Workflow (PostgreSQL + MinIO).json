@@ -57,7 +57,7 @@
           "mode": "list",
           "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
         },
-        "prompt": "=TASK: IMAGE GENERATION\n\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"{{ $json.output.exampleSentence }}\".\n\n**Style:** Friendly, educational corporate vector art.\n**Visual Elements:** Clean thick outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.\n**Constraint:** If you produce ANY text, digit, letter, numeral, or word inside the image, the output is INVALID. The image must contain only visual depictions \u2014 no typography, no labels, no numbers as numerals, no spelled-out words. For number concepts, show the quantity using grouped objects, dice pips, or finger counts \u2014 never write the number as a digit or word. The output must be the illustration only.",
+        "prompt": "={{ $json.imagePrompt }}",
         "options": {
           "binaryPropertyOutput": "=flashcard_illus"
         }
@@ -505,7 +505,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const body = $input.first().json.body;\nreturn [{ json: { output: { word: body.word, exampleSentence: body.exampleSentence } } }];"
+        "jsCode": "const body = $input.first().json.body;\nreturn [{ json: { output: {\n  word: body.word,\n  exampleSentence: body.exampleSentence,\n  category: body.category || ''\n} } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -525,7 +525,7 @@
           "mode": "list",
           "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
         },
-        "prompt": "=TASK: IMAGE GENERATION\n\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"{{ $json.output.exampleSentence }}\".\n\n**Style:** Friendly, educational corporate vector art.\n**Visual Elements:** Clean thick outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.\n**Constraint:** If you produce ANY text, digit, letter, numeral, or word inside the image, the output is INVALID. The image must contain only visual depictions \u2014 no typography, no labels, no numbers as numerals, no spelled-out words. For number concepts, show the quantity using grouped objects, dice pips, or finger counts \u2014 never write the number as a digit or word. The output must be the illustration only.",
+        "prompt": "={{ $json.imagePrompt }}",
         "options": {
           "binaryPropertyOutput": "=flashcard_illus"
         }
@@ -633,6 +633,32 @@
           "name": "PostgreSQL account"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst word = $json.output.word;\nconst cat = ($json.output.category || '').toLowerCase().trim();\nconst sentence = $json.output.exampleSentence || '';\n\nconst numberMap = {\n  zero:0,one:1,two:2,three:3,four:4,five:5,six:6,\n  seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12\n};\n\nconst style = 'Style: friendly educational flat vector art with thick clean outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.';\nconst constraint = 'CONSTRAINT: If you produce ANY text, digit, letter, numeral, or word inside the image, the output is INVALID. The image must contain only visual depictions \u2014 no typography, no labels, no numbers as numerals, no spelled-out words.';\n\nlet prompt;\n\nif (cat === 'number' && word.toLowerCase() in numberMap) {\n  const n = numberMap[word.toLowerCase()];\n  if (n === 0) {\n    prompt = `TASK: IMAGE GENERATION\\n\\nShow a single empty bowl or open empty hand with absolutely nothing in it. The emptiness and absence is the focal point \u2014 the container is clearly, obviously empty.\\n\\n${style}\\n${constraint}`;\n  } else if (n <= 6) {\n    prompt = `TASK: IMAGE GENERATION\\n\\nShow a standard six-sided die face displaying exactly ${n} pip(s) in the correct arrangement. The die should be large and centered on a plain pastel background.\\n\\n${style}\\n${constraint}`;\n  } else {\n    prompt = `TASK: IMAGE GENERATION\\n\\nShow a hand (or two hands if needed) holding up exactly ${n} finger(s) clearly visible and countable. The hand(s) should be large and centered.\\n\\n${style}\\n${constraint}`;\n  }\n} else if (cat === 'shape') {\n  prompt = `TASK: IMAGE GENERATION\\n\\nRender only the geometric shape \"${word}\", large and centered, on a plain pastel background. The shape should be the single dominant visual element, drawn with thick clean outlines and filled with a bright pastel color.\\n\\n${style}\\n${constraint}`;\n} else if (cat.includes('body')) {\n  prompt = `TASK: IMAGE GENERATION\\n\\nA friendly cartoon character with the body part \"${word}\" prominently highlighted \u2014 make it noticeably larger, a brighter contrasting color, or pointed to with a small arrow. The highlighted part must be the clear focal point.\\n\\n${style}\\n${constraint}`;\n} else if (cat.includes('comparative') || word.endsWith('er') || word.endsWith('est')) {\n  // Check if it's actually a comparative/superlative adjective\n  const isComparative = cat.includes('comparative') || cat.includes('adjective');\n  if (isComparative) {\n    prompt = `TASK: IMAGE GENERATION\\n\\nTwo near-identical objects side by side. The object on the right is clearly \"${word}\" than the one on the left \u2014 exaggerate the difference so it is immediately, unmistakably obvious. Both objects should be simple and recognizable (e.g. two dogs, two trees, two cups).\\n\\n${style}\\n${constraint}`;\n  } else {\n    prompt = `TASK: IMAGE GENERATION\\n\\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"${sentence}\".\\n\\n${style}\\n${constraint}`;\n  }\n} else {\n  prompt = `TASK: IMAGE GENERATION\\n\\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"${sentence}\".\\n\\n${style}\\n${constraint}`;\n}\n\nreturn [{ json: { ...item.json, imagePrompt: prompt } }];\n"
+      },
+      "id": "build-image-prompt",
+      "name": "Build Image Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1352,
+        2672
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst word = $json.output.word;\nconst cat = ($json.output.category || '').toLowerCase().trim();\nconst sentence = $json.output.exampleSentence || '';\n\nconst numberMap = {\n  zero:0,one:1,two:2,three:3,four:4,five:5,six:6,\n  seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12\n};\n\nconst style = 'Style: friendly educational flat vector art with thick clean outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.';\nconst constraint = 'CONSTRAINT: If you produce ANY text, digit, letter, numeral, or word inside the image, the output is INVALID. The image must contain only visual depictions \u2014 no typography, no labels, no numbers as numerals, no spelled-out words.';\n\nlet prompt;\n\nif (cat === 'number' && word.toLowerCase() in numberMap) {\n  const n = numberMap[word.toLowerCase()];\n  if (n === 0) {\n    prompt = `TASK: IMAGE GENERATION\\n\\nShow a single empty bowl or open empty hand with absolutely nothing in it. The emptiness and absence is the focal point \u2014 the container is clearly, obviously empty.\\n\\n${style}\\n${constraint}`;\n  } else if (n <= 6) {\n    prompt = `TASK: IMAGE GENERATION\\n\\nShow a standard six-sided die face displaying exactly ${n} pip(s) in the correct arrangement. The die should be large and centered on a plain pastel background.\\n\\n${style}\\n${constraint}`;\n  } else {\n    prompt = `TASK: IMAGE GENERATION\\n\\nShow a hand (or two hands if needed) holding up exactly ${n} finger(s) clearly visible and countable. The hand(s) should be large and centered.\\n\\n${style}\\n${constraint}`;\n  }\n} else if (cat === 'shape') {\n  prompt = `TASK: IMAGE GENERATION\\n\\nRender only the geometric shape \"${word}\", large and centered, on a plain pastel background. The shape should be the single dominant visual element, drawn with thick clean outlines and filled with a bright pastel color.\\n\\n${style}\\n${constraint}`;\n} else if (cat.includes('body')) {\n  prompt = `TASK: IMAGE GENERATION\\n\\nA friendly cartoon character with the body part \"${word}\" prominently highlighted \u2014 make it noticeably larger, a brighter contrasting color, or pointed to with a small arrow. The highlighted part must be the clear focal point.\\n\\n${style}\\n${constraint}`;\n} else {\n  prompt = `TASK: IMAGE GENERATION\\n\\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"${sentence}\".\\n\\n${style}\\n${constraint}`;\n}\n\nreturn [{ json: { ...item.json, imagePrompt: prompt } }];\n"
+      },
+      "id": "regen-build-image-prompt",
+      "name": "Regen: Build Image Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -492,
+        2200
+      ]
     }
   ],
   "pinData": {},
@@ -774,7 +800,7 @@
       "main": [
         [
           {
-            "node": "Regen: Generate Illustration",
+            "node": "Regen: Build Image Prompt",
             "type": "main",
             "index": 0
           }
@@ -890,7 +916,7 @@
       "main": [
         [
           {
-            "node": "Generate Flashcard Illustration",
+            "node": "Build Image Prompt",
             "type": "main",
             "index": 0
           },
@@ -919,6 +945,28 @@
           {
             "node": "Get Words",
             "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Flashcard Illustration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regen: Build Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Regen: Generate Illustration",
+            "type": "main",
             "index": 0
           }
         ]

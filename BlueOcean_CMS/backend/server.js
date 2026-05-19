@@ -257,7 +257,7 @@ app.post("/api/flashcards/:word/regenerate-image", async (req, res) => {
     const { word } = req.params;
 
     const result = await pool.query(
-      "SELECT word, example_sentence FROM vocab_flashcards WHERE word = $1",
+      "SELECT word, example_sentence, category FROM vocab_flashcards WHERE word = $1",
       [word]
     );
 
@@ -265,12 +265,14 @@ app.post("/api/flashcards/:word/regenerate-image", async (req, res) => {
       return res.status(404).json({ error: "Flashcard not found", word });
     }
 
+    const row = result.rows[0];
     const response = await fetch(process.env.N8N_WEBHOOK_URL, {
       method: "POST",
       body: JSON.stringify({
         regenerateImage: true,
-        word: result.rows[0].word,
-        exampleSentence: result.rows[0].example_sentence,
+        word: row.word,
+        exampleSentence: row.example_sentence,
+        category: row.category || "",
       }),
       headers: { "Content-Type": "application/json" },
     });
