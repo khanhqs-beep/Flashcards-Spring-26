@@ -186,23 +186,46 @@ export function BulkReview() {
   const handleRegenerate = async (word: string) => {
     setRegenerating((prev) => ({ ...prev, [word]: true }));
     try {
+      // Capture current mediaLink to detect change
+      const currentCard = flashcards.find((c) => c.word === word);
+      const oldLink = currentCard?.mediaLink ?? "";
+
       await regenerateImage(word);
-      showSuccess(word, "Regenerating...");
-      setTimeout(async () => {
+      showSuccess(word, "Regenerating…");
+
+      // Poll every 5s for up to 30s until image URL changes
+      let attempts = 0;
+      const maxAttempts = 6;
+      const poll = async () => {
+        attempts++;
         try {
           const result = await fetchFlashcardByWord(word);
-          setFlashcards((prev) =>
-            prev.map((c) => (c.word === word ? result.data : c))
-          );
-          setImgBust((prev) => ({ ...prev, [word]: Date.now() }));
-          showSuccess(word, "Image updated");
+          const newLink = result.data.mediaLink ?? "";
+          // Detect change: different URL, or same URL but we assume regen done after 30s
+          if (newLink !== oldLink || attempts >= maxAttempts) {
+            setFlashcards((prev) =>
+              prev.map((c) => (c.word === word ? result.data : c))
+            );
+            setImgBust((prev) => ({ ...prev, [word]: Date.now() }));
+            setRegenerating((prev) => ({ ...prev, [word]: false }));
+            showSuccess(word, "Image updated");
+            return;
+          }
         } catch {
-          // refetch failed silently
+          // fetch failed, keep polling
         }
-      }, 10000);
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        } else {
+          // Final timeout — force cache bust anyway
+          setImgBust((prev) => ({ ...prev, [word]: Date.now() }));
+          setRegenerating((prev) => ({ ...prev, [word]: false }));
+          showSuccess(word, "Refresh to see new image");
+        }
+      };
+      setTimeout(poll, 5000);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Regeneration failed");
-    } finally {
       setRegenerating((prev) => ({ ...prev, [word]: false }));
     }
   };
@@ -365,7 +388,13 @@ export function BulkReview() {
                     }`}
                   />
                 </button>
-                {successMsg[card.word] && (
+                {regenerating[card.word] && (
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    <span className="text-white text-[10px] mt-1">Regenerating…</span>
+                  </div>
+                )}
+                {successMsg[card.word] && !regenerating[card.word] && (
                   <div className="absolute bottom-0 left-0 right-0 bg-green-500/90 text-white text-[10px] text-center py-0.5 flex items-center justify-center gap-0.5">
                     <Check className="w-2.5 h-2.5" />
                     {successMsg[card.word]}

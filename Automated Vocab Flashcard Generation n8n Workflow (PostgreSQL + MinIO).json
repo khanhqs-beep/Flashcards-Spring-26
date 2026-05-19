@@ -57,7 +57,7 @@
           "mode": "list",
           "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
         },
-        "prompt": "=TASK: IMAGE GENERATION\n\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"{{ $json.output.exampleSentence }}\".\n\n**Style:** Friendly, educational corporate vector art.\n**Visual Elements:** Clean thick outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.\n**Constraint:** Do NOT generate any text, words, letters, or numbers within the image. The output must be the illustration only.",
+        "prompt": "=TASK: IMAGE GENERATION\n\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"{{ $json.output.exampleSentence }}\".\n\n**Style:** Friendly, educational corporate vector art.\n**Visual Elements:** Clean thick outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.\n**Constraint:** If you produce ANY text, digit, letter, numeral, or word inside the image, the output is INVALID. The image must contain only visual depictions \u2014 no typography, no labels, no numbers as numerals, no spelled-out words. For number concepts, show the quantity using grouped objects, dice pips, or finger counts \u2014 never write the number as a digit or word. The output must be the illustration only.",
         "options": {
           "binaryPropertyOutput": "=flashcard_illus"
         }
@@ -123,7 +123,7 @@
         "text": "= {{ $json.word }}",
         "hasOutputParser": true,
         "options": {
-          "systemMessage": "You are a vocabulary extraction assistant for an English-learning project using Google's Gemini API. Read the provided text from the Fry Word List or Oxford 3000-5000 and return only valid vocabulary words.\n\nUse the following instructions and output format:\n\nInput\n\n- Word\n\nOutput\n\nFor each distinct word found in the text:\n\n1. Extract the word  \n   - Identify the primary English word from each entry, ignoring formatting noise, list headers, and grammatical abbreviations (e.g., 'v.', 'n.', 'adj.').\n   - Lowercase it (unless it is a proper noun).  \n   - Exclude duplicates, numbers, and obvious non-words.\n\n2. Generate difficulty label\n   - Verify if a difficulty label exists; if missing, evaluate the vocabulary and assign the appropriate CEFR level (A1–C1).\n\n3. Generate word definition  \n   - Generate a concise, student-friendly definition in less than or equal to 10 words or 60 characters, strictly constraining the defining vocabulary and sentence structure to match the identified CEFR proficiency level. \n   - The definition should be a phrase in lowercase.\n\n4. Generate example sentence  \n   - Generate a single, concise example sentence demonstrating the target word, strictly calibrating the sentence structure and surrounding vocabulary to match the word's specific CEFR proficiency level.\n\n5. Identify part of speech  \n   - Provide a coarse POS tag under `pos`, such as `noun`, `verb`, `adjective`, `adverb`, `preposition`, `pronoun`, `conjunction`.\n\n6. Generate a category\n  - Provide a single broad semantic category label (such as food, emotion, action, animal, environment, object, place, or person) for the given English word.\n\n7. Generate a unique ID  \n   - Create a short unique integer ID under 'id' for each word (e.g., 1).\n\nReturn a valid, unformatted JSON object containing a single root array named \"output\", where each entry contains the following parameters: word, definition, exampleSentence, label, pos, category, id."
+          "systemMessage": "You are a vocabulary extraction assistant for an English-learning project using Google's Gemini API. Read the provided text from the Fry Word List or Oxford 3000-5000 and return only valid vocabulary words.\n\nUse the following instructions and output format:\n\nInput\n\n- Word\n\nOutput\n\nFor each distinct word found in the text:\n\n1. Extract the word  \n   - Identify the primary English word from each entry, ignoring formatting noise, list headers, and grammatical abbreviations (e.g., 'v.', 'n.', 'adj.').\n   - Lowercase it (unless it is a proper noun).  \n   - Exclude duplicates, numbers, and obvious non-words.\n\n2. Generate difficulty label\n   - Verify if a difficulty label exists; if missing, evaluate the vocabulary and assign the appropriate CEFR level (A1\u2013C1).\n\n3. Generate word definition  \n   - Generate a concise, student-friendly definition in less than or equal to 10 words or 60 characters, strictly constraining the defining vocabulary and sentence structure to match the identified CEFR proficiency level. \n   - The definition should be a phrase in lowercase.\n\n4. Generate example sentence  \n   - Generate a single, concise example sentence demonstrating the target word, strictly calibrating the sentence structure and surrounding vocabulary to match the word's specific CEFR proficiency level.\n\n5. Identify part of speech  \n   - Provide a coarse POS tag under `pos`, such as `noun`, `verb`, `adjective`, `adverb`, `preposition`, `pronoun`, `conjunction`.\n\n6. Generate a category\n  - Provide a single broad semantic category label (such as food, emotion, action, animal, environment, object, place, or person) for the given English word.\n\n7. Generate a unique ID  \n   - Create a short unique integer ID under 'id' for each word (e.g., 1).\n\n\n\n8. Cardinal number override\n   - If the word is a cardinal number (zero, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, hundred, thousand, million, billion), always set pos to \"noun\" and category to \"number\", regardless of how the word might be used in other contexts.\n\nReturn a valid, unformatted JSON object containing a single root array named \"output\", where each entry contains the following parameters: word, definition, exampleSentence, label, pos, category, id."
         }
       },
       "id": "6775b287-f6fc-4cc1-95c2-5a48a062a286",
@@ -410,7 +410,7 @@
             {
               "id": "a1b2c3d4-url-builder",
               "name": "url",
-              "value": "={{ $env.MINIO_PUBLIC_URL }}/{{ $env.MINIO_BUCKET }}/flashcards/{{ $('Split Out1').item.json.output.word }}.png",
+              "value": "={{ $env.MINIO_PUBLIC_URL + '/' + $env.MINIO_BUCKET + '/flashcards/' + $('Split Out1').item.json.output.word + '.png' }}",
               "type": "string"
             }
           ]
@@ -525,7 +525,7 @@
           "mode": "list",
           "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
         },
-        "prompt": "=TASK: IMAGE GENERATION\n\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"{{ $json.output.exampleSentence }}\".\n\n**Style:** Friendly, educational corporate vector art.\n**Visual Elements:** Clean thick outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.\n**Constraint:** Do NOT generate any text, words, letters, or numbers within the image. The output must be the illustration only.",
+        "prompt": "=TASK: IMAGE GENERATION\n\nGenerate a flat vector illustration depicting the visual concept described in the sentence: \"{{ $json.output.exampleSentence }}\".\n\n**Style:** Friendly, educational corporate vector art.\n**Visual Elements:** Clean thick outlines, flat pastel colors, simple character designs. Include small floating icons like speech bubbles or sparkles to enhance the scene.\n**Constraint:** If you produce ANY text, digit, letter, numeral, or word inside the image, the output is INVALID. The image must contain only visual depictions \u2014 no typography, no labels, no numbers as numerals, no spelled-out words. For number concepts, show the quantity using grouped objects, dice pips, or finger counts \u2014 never write the number as a digit or word. The output must be the illustration only.",
         "options": {
           "binaryPropertyOutput": "=flashcard_illus"
         }
@@ -579,7 +579,7 @@
             {
               "id": "regen-url-builder",
               "name": "url",
-              "value": "={{ $env.MINIO_PUBLIC_URL }}/{{ $env.MINIO_BUCKET }}/flashcards/{{ $('Setup Regenerate Data').item.json.output.word }}.png",
+              "value": "={{ $env.MINIO_PUBLIC_URL + '/' + $env.MINIO_BUCKET + '/flashcards/' + $('Setup Regenerate Data').item.json.output.word + '.png' }}",
               "type": "string"
             }
           ]
