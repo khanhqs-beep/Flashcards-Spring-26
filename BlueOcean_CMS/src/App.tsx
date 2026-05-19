@@ -36,6 +36,7 @@ export default function App() {
   const handleFileComplete = (
     id: string,
     processedData: WordCard[],
+    wordCount?: number | null,
   ) => {
     setUploadedFiles((prev) =>
       prev.map((file) =>
@@ -45,6 +46,7 @@ export default function App() {
               status: "completed" as const,
               processedData,
               progress: 100,
+              wordCount: wordCount ?? processedData.length,
             }
           : file,
       ),

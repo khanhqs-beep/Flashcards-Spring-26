@@ -6,7 +6,7 @@ import { uploadFileToBackend } from '../utils/api';
 interface FileUploaderProps {
   onFilesUploaded: (files: FileData[]) => void;
   onProgressUpdate: (id: string, progress: number) => void;
-  onFileComplete: (id: string, processedData: WordCard[]) => void;
+  onFileComplete: (id: string, processedData: WordCard[], wordCount?: number | null) => void;
   onFileError: (id: string, errorMessage: string) => void;
 }
 
@@ -72,9 +72,9 @@ export function FileUploader({ onFilesUploaded, onProgressUpdate, onFileComplete
           // Use the processed data directly from n8n
           // response.data should already be in WordCard[] format from n8n
           const processedData = Array.isArray(response.data) ? response.data : [];
-          
+
           onProgressUpdate(fileData.id, 100);
-          onFileComplete(fileData.id, processedData);
+          onFileComplete(fileData.id, processedData, response.wordCount);
         } catch (err) {
           console.error('Error processing file:', err);
           onFileError(

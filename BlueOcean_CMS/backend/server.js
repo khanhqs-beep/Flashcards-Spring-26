@@ -97,10 +97,15 @@ app.post("/api/upload", upload.single("data"), async (req, res) => {
 
     console.log("File sent to n8n for processing");
 
+    const isPdf = ext === ".pdf";
     res.json({
       success: true,
-      message: "File uploaded and sent for processing",
+      message: isPdf
+        ? "PDF sent for processing — check Bulk Review shortly"
+        : "File uploaded and sent for processing",
       originalFilename: req.file.originalname,
+      data: isPdf ? [] : words,
+      wordCount: isPdf ? null : words.length,
     });
   } catch (error) {
     console.error("Error processing file:", error);

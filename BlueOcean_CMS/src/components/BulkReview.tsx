@@ -68,6 +68,7 @@ function ExpandableInput({
       onChange={(e) => onChange(e.target.value)}
       onFocus={() => setExpanded(true)}
       placeholder={placeholder}
+      title={value}
       className="w-full px-1 py-0.5 text-xs h-6 border border-gray-200 rounded focus:border-[#5DADE2] focus:outline-none focus:ring-1 focus:ring-[#5DADE2] truncate"
     />
   );
@@ -293,6 +294,27 @@ export function BulkReview() {
             </button>
           )}
         </div>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1.5 ml-auto">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="flex items-center gap-0.5 px-2 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-3 h-3" /> Prev
+            </button>
+            <span className="text-white text-xs">
+              {page + 1}/{totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="flex items-center gap-0.5 px-2 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <button
           onClick={loadFlashcards}
           className="px-3 py-1.5 text-sm border border-white text-white rounded-lg hover:bg-white hover:text-[#003D82] transition-colors"
@@ -300,29 +322,6 @@ export function BulkReview() {
           Refresh
         </button>
       </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3">
-          <button
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={page === 0}
-            className="flex items-center gap-0.5 px-2 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronLeft className="w-3 h-3" /> Prev
-          </button>
-          <span className="text-white text-xs">
-            {page + 1} / {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            disabled={page >= totalPages - 1}
-            className="flex items-center gap-0.5 px-2 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            Next <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
-      )}
 
       {/* Empty search state */}
       {filtered.length === 0 && debouncedQuery && (
@@ -342,7 +341,7 @@ export function BulkReview() {
               }`}
             >
               {/* Image */}
-              <div className="relative h-16 bg-gradient-to-br from-gray-100 to-gray-200">
+              <div className="relative aspect-square bg-gradient-to-br from-gray-100 to-gray-200">
                 {card.mediaLink ? (
                   <img
                     src={imgSrc(card)}

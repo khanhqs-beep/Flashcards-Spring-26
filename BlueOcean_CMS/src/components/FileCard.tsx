@@ -80,7 +80,9 @@ export function FileCard({ file, onDelete }: FileCardProps) {
           </div>
           <div className="flex items-center justify-between text-gray-600">
             <span>Words:</span>
-            <span className="text-[#003D82]">{file.processedData.length}</span>
+            <span className="text-[#003D82]">
+              {file.wordCount != null ? file.wordCount : file.type === 'pdf' ? '—' : file.processedData.length}
+            </span>
           </div>
         </div>
 
@@ -103,9 +105,18 @@ export function FileCard({ file, onDelete }: FileCardProps) {
             </div>
           )}
           {file.status === 'completed' && (
-            <div className="flex items-center gap-2 text-green-600">
-              <CheckCircle className="w-4 h-4" />
-              <span>Processed successfully</span>
+            <div>
+              <div className="flex items-center gap-2 text-green-600">
+                <CheckCircle className="w-4 h-4" />
+                <span>
+                  {file.wordCount == null && file.type === 'pdf'
+                    ? 'Sent for processing'
+                    : 'Processed successfully'}
+                </span>
+              </div>
+              <p className="text-xs text-[#5DADE2] mt-1">
+                View results in the Bulk Review tab
+              </p>
             </div>
           )}
           {file.status === 'error' && (

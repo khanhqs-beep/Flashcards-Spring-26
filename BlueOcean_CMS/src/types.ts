@@ -9,6 +9,7 @@ export interface FileData {
   status: 'processing' | 'completed' | 'error';
   progress?: number; // 0-100
   errorMessage?: string;
+  wordCount?: number | null;
 }
 
 export interface WordCard {

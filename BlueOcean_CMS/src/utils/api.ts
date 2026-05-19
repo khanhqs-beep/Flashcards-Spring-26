@@ -6,6 +6,7 @@ export interface UploadResponse {
   success: boolean;
   data: unknown;
   originalFilename: string;
+  wordCount?: number | null;
 }
 
 export interface ErrorResponse {
