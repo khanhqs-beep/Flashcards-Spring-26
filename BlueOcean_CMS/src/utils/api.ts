@@ -24,6 +24,7 @@ export interface Flashcard {
   mediaLink: string;
   partOfSpeech: string;
   source: string;
+  mediaUpdatedAt?: string;
 }
 
 export interface FlashcardsResponse {

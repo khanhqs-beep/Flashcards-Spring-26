@@ -29,6 +29,34 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+// Run migration on startup: add media_updated_at column + trigger
+(async () => {
+  try {
+    await pool.query(`
+      ALTER TABLE vocab_flashcards
+        ADD COLUMN IF NOT EXISTS media_updated_at timestamptz DEFAULT now();
+    `);
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION bump_media_updated_at()
+      RETURNS trigger AS $$
+      BEGIN
+        NEW.media_updated_at = now();
+        RETURN NEW;
+      END
+      $$ LANGUAGE plpgsql;
+    `);
+    await pool.query(`
+      DROP TRIGGER IF EXISTS tr_bump_media_updated_at ON vocab_flashcards;
+      CREATE TRIGGER tr_bump_media_updated_at
+        BEFORE UPDATE ON vocab_flashcards
+        FOR EACH ROW EXECUTE FUNCTION bump_media_updated_at();
+    `);
+    console.log("Migration: media_updated_at column + trigger ready");
+  } catch (err) {
+    console.error("Migration warning:", err.message);
+  }
+})();
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok", message: "Backend server is running" });
 });
@@ -119,7 +147,7 @@ app.post("/api/upload", upload.single("data"), async (req, res) => {
 app.get("/api/flashcards", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT word, category, definition, example_sentence, label, media_link, pos, source FROM vocab_flashcards ORDER BY created_at DESC"
+      "SELECT word, category, definition, example_sentence, label, media_link, pos, source, media_updated_at FROM vocab_flashcards ORDER BY created_at DESC"
     );
 
     const flashcards = result.rows.map((row) => ({
@@ -132,6 +160,7 @@ app.get("/api/flashcards", async (req, res) => {
       mediaLink: row.media_link,
       partOfSpeech: row.pos,
       source: row.source,
+      mediaUpdatedAt: row.media_updated_at,
     }));
 
     console.log(`Fetched ${flashcards.length} flashcards`);
@@ -153,7 +182,7 @@ app.get("/api/flashcards/:word", async (req, res) => {
   try {
     const { word } = req.params;
     const result = await pool.query(
-      "SELECT word, category, definition, example_sentence, label, media_link, pos, source FROM vocab_flashcards WHERE word = $1",
+      "SELECT word, category, definition, example_sentence, label, media_link, pos, source, media_updated_at FROM vocab_flashcards WHERE word = $1",
       [word]
     );
 
@@ -174,6 +203,7 @@ app.get("/api/flashcards/:word", async (req, res) => {
         mediaLink: row.media_link,
         partOfSpeech: row.pos,
         source: row.source,
+        mediaUpdatedAt: row.media_updated_at,
       },
     });
   } catch (error) {
@@ -198,7 +228,7 @@ app.put("/api/flashcards/:word", async (req, res) => {
            label = COALESCE($4, label),
            category = COALESCE($5, category)
        WHERE word = $6
-       RETURNING word, category, definition, example_sentence, label, media_link, pos, source`,
+       RETURNING word, category, definition, example_sentence, label, media_link, pos, source, media_updated_at`,
       [definition, exampleSentence, partOfSpeech, label, category, word]
     );
 
@@ -219,6 +249,7 @@ app.put("/api/flashcards/:word", async (req, res) => {
         mediaLink: row.media_link,
         partOfSpeech: row.pos,
         source: row.source,
+        mediaUpdatedAt: row.media_updated_at,
       },
     });
   } catch (error) {

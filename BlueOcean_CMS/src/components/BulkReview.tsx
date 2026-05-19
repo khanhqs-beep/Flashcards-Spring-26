@@ -85,7 +85,6 @@ export function BulkReview() {
   const [successMsg, setSuccessMsg] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [imgBust, setImgBust] = useState<Record<string, number>>({});
   const searchRef = useRef<HTMLInputElement>(null);
 
   const loadFlashcards = useCallback(async () => {
@@ -186,29 +185,26 @@ export function BulkReview() {
   const handleRegenerate = async (word: string) => {
     setRegenerating((prev) => ({ ...prev, [word]: true }));
     try {
-      // Capture current mediaLink to detect change
       const currentCard = flashcards.find((c) => c.word === word);
-      const oldLink = currentCard?.mediaLink ?? "";
+      const oldStamp = currentCard?.mediaUpdatedAt ?? "";
 
       await regenerateImage(word);
       showSuccess(word, "Regenerating…");
 
-      // Poll every 5s for up to 30s until image URL changes
+      // Poll every 5s for up to 30s until media_updated_at changes
       let attempts = 0;
       const maxAttempts = 6;
       const poll = async () => {
         attempts++;
         try {
           const result = await fetchFlashcardByWord(word);
-          const newLink = result.data.mediaLink ?? "";
-          // Detect change: different URL, or same URL but we assume regen done after 30s
-          if (newLink !== oldLink || attempts >= maxAttempts) {
+          const newStamp = result.data.mediaUpdatedAt ?? "";
+          if (newStamp !== oldStamp || attempts >= maxAttempts) {
             setFlashcards((prev) =>
               prev.map((c) => (c.word === word ? result.data : c))
             );
-            setImgBust((prev) => ({ ...prev, [word]: Date.now() }));
             setRegenerating((prev) => ({ ...prev, [word]: false }));
-            showSuccess(word, "Image updated");
+            showSuccess(word, newStamp !== oldStamp ? "Image updated" : "Refresh to see new image");
             return;
           }
         } catch {
@@ -217,8 +213,6 @@ export function BulkReview() {
         if (attempts < maxAttempts) {
           setTimeout(poll, 5000);
         } else {
-          // Final timeout — force cache bust anyway
-          setImgBust((prev) => ({ ...prev, [word]: Date.now() }));
           setRegenerating((prev) => ({ ...prev, [word]: false }));
           showSuccess(word, "Refresh to see new image");
         }
@@ -247,8 +241,11 @@ export function BulkReview() {
 
   const imgSrc = (card: Flashcard) => {
     if (!card.mediaLink) return "";
-    const bust = imgBust[card.word];
-    return bust ? `${card.mediaLink}?t=${bust}` : card.mediaLink;
+    const stamp = card.mediaUpdatedAt
+      ? new Date(card.mediaUpdatedAt).getTime()
+      : 0;
+    const sep = card.mediaLink.includes("?") ? "&" : "?";
+    return `${card.mediaLink}${sep}v=${stamp}`;
   };
 
   if (loading) {
